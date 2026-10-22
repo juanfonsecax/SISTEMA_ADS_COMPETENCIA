@@ -1,0 +1,49 @@
+concepto_key,variante_operador,anunciante,dias,replicas,favorito_juan,ruta_banco,origen_img
+C1_OFERTA,oferta,Camila Recomienda,18,16,SI,C1_OFERTA/oferta__Camila-Recomienda__01_1561152092075074.jpg,_IMG/Camila_Recomienda/01_1561152092075074.jpg
+C1_OFERTA,oferta,Ovejitas Lab,27,1,SI,C1_OFERTA/oferta__Ovejitas-Lab__04_1420447306591898.jpg,_IMG/Ovejitas_Lab/04_1420447306591898.jpg
+C2_BENEFICIOS,colage-sintomas,Camila Recomienda,24,9,SI,C2_BENEFICIOS/colage-sintomas__Camila-Recomienda__12_3103763283146693.jpg,_IMG/Camila_Recomienda/12_3103763283146693.jpg
+C2_BENEFICIOS,densa,Aranza Glow,89,1,SI,C2_BENEFICIOS/densa__Aranza-Glow__12_1664152224892342.jpg,_IMG/Aranza_Glow/12_1664152224892342.jpg
+C2_BENEFICIOS,densa,Aranza Glow,89,1,SI,C2_BENEFICIOS/densa__Aranza-Glow__13_2474355926408939.jpg,_IMG/Aranza_Glow/13_2474355926408939.jpg
+C2_BENEFICIOS,densa,Aranza Glow,?,?,NO,C2_BENEFICIOS/densa__Aranza-Glow__04_1524547329320527.jpg,_IMG/Aranza_Glow/04_1524547329320527.jpg
+C2_BENEFICIOS,densa,Tienda de Don Gato,7,1,SI,C2_BENEFICIOS/densa__Tienda-de-Don-Gato__01_1823612068617773.jpg,_IMG/Tienda_de_Don_Gato/01_1823612068617773.jpg
+C2_BENEFICIOS,densa,Tienda de Don Gato,7,1,SI,C2_BENEFICIOS/densa__Tienda-de-Don-Gato__03_27754777454205963.jpg,_IMG/Tienda_de_Don_Gato/03_27754777454205963.jpg
+C2_BENEFICIOS,densa,Tienda de Don Gato,?,?,NO,C2_BENEFICIOS/densa__Tienda-de-Don-Gato__02_1207357654886526.jpg,_IMG/Tienda_de_Don_Gato/02_1207357654886526.jpg
+C2_BENEFICIOS,densa,Tiendas KetsalStore,13,1,SI,C2_BENEFICIOS/densa__Tiendas-KetsalStore__05_1762477188271110.jpg,_IMG/Tiendas_KetsalStore/05_1762477188271110.jpg
+C2_BENEFICIOS,densa,Tiendas KetsalStore,7,1,SI,C2_BENEFICIOS/densa__Tiendas-KetsalStore__09_1053624560407481.jpg,_IMG/Tiendas_KetsalStore/09_1053624560407481.jpg
+C2_BENEFICIOS,ligera,Camila Recomienda,18,4,SI,C2_BENEFICIOS/ligera__Camila-Recomienda__25_1019494497528403.jpg,_IMG/Camila_Recomienda/25_1019494497528403.jpg
+C2_BENEFICIOS,ligera,Camila Recomienda,19,10,SI,C2_BENEFICIOS/ligera__Camila-Recomienda__15_1364693855873597.jpg,_IMG/Camila_Recomienda/15_1364693855873597.jpg
+C2_BENEFICIOS,ligera,Tiendas KetsalStore,7,1,SI,C2_BENEFICIOS/ligera__Tiendas-KetsalStore__14_1779511049710752.jpg,_IMG/Tiendas_KetsalStore/14_1779511049710752.jpg
+C2_BENEFICIOS,problema-grande,Dra.Dra. Sofa Alejandra Mo,5,5,SI,C2_BENEFICIOS/problema-grande__Dra-Dra-Sofa-Alejandra__02_1446615720714296.jpg,_IMG/Dra_Dra__Sofa_Alejandra_Mo/02_1446615720714296.jpg
+C3_SINTOMA,problema-grande,Andromeda Market,13,1,SI,C3_SINTOMA/problema-grande__Andromeda-Market__01_1085527623827144.jpg,_IMG/Andromeda_Market/01_1085527623827144.jpg
+C3_SINTOMA,ugc,Mi Camino al Bienestar,10,2,SI,C3_SINTOMA/ugc__Mi-Camino-al-Bienestar__11_1528566351843225.jpg,_IMG/Mi_Camino_al_Bienestar/11_1528566351843225.jpg
+C4_TRANSFORMACION,antes-despues,Aranza Glow,102,1,SI,C4_TRANSFORMACION/antes-despues__Aranza-Glow__03_1028456859550381.jpg,_IMG/Aranza_Glow/03_1028456859550381.jpg
+C4_TRANSFORMACION,antes-despues,Aranza Glow,113,1,SI,C4_TRANSFORMACION/antes-despues__Aranza-Glow__08_964174726362714.jpg,_IMG/Aranza_Glow/08_964174726362714.jpg
+C4_TRANSFORMACION,antes-despues,Teyra,5,1,SI,C4_TRANSFORMACION/antes-despues__Teyra__04_1316717740287683.jpg,_IMG/Teyra/04_1316717740287683.jpg
+C4_TRANSFORMACION,antes-despues,Teyra,54,1,SI,C4_TRANSFORMACION/antes-despues__Teyra__01_1000423539275941.jpg,_IMG/Teyra/01_1000423539275941.jpg
+C4_TRANSFORMACION,antes-despues,Teyra,54,1,SI,C4_TRANSFORMACION/antes-despues__Teyra__03_3358506677671426.jpg,_IMG/Teyra/03_3358506677671426.jpg
+C4_TRANSFORMACION,ugc,Mi Camino al Bienestar,10,2,SI,C4_TRANSFORMACION/ugc__Mi-Camino-al-Bienestar__08_1246537431875248.jpg,_IMG/Mi_Camino_al_Bienestar/08_1246537431875248.jpg
+C4_TRANSFORMACION,ugc,SupleNat,18,1,SI,C4_TRANSFORMACION/ugc__SupleNat__01_1009614115306946.jpg,_IMG/SupleNat/01_1009614115306946.jpg
+C5_PRUEBA,ugc,Doctora Patricia Morales,6,3,SI,C5_PRUEBA/ugc__Doctora-Patricia-Moral__03_1563543785471205.jpg,_IMG/Doctora_Patricia_Morales/03_1563543785471205.jpg
+C5_PRUEBA,ugc,Doctora Patricia Morales,6,3,SI,C5_PRUEBA/ugc__Doctora-Patricia-Moral__07_1033317359293146.jpg,_IMG/Doctora_Patricia_Morales/07_1033317359293146.jpg
+C5_PRUEBA,ugc,Megacomprasgt,7,1,SI,C5_PRUEBA/ugc__Megacomprasgt__05_1030875646366807.jpg,_IMG/Megacomprasgt/05_1030875646366807.jpg
+C5_PRUEBA,ugc,Megacomprasgt,7,1,SI,C5_PRUEBA/ugc__Megacomprasgt__06_1032838982690077.jpg,_IMG/Megacomprasgt/06_1032838982690077.jpg
+C5_PRUEBA,ugc,Vida Natural,8,1,SI,C5_PRUEBA/ugc__Vida-Natural__01_1019740840890431.jpg,_IMG/Vida_Natural/01_1019740840890431.jpg
+C5_PRUEBA,unboxing,Tiendas KetsalStore,7,4,SI,C5_PRUEBA/unboxing__Tiendas-KetsalStore__15_2070590410487975.jpg,_IMG/Tiendas_KetsalStore/15_2070590410487975.jpg
+C5_PRUEBA,unboxing,Tiendas KetsalStore,7,4,SI,C5_PRUEBA/unboxing__Tiendas-KetsalStore__19_28466089996316019.jpg,_IMG/Tiendas_KetsalStore/19_28466089996316019.jpg
+C7_DESEO,deseo,Aurora GT,4,1,SI,C7_DESEO/deseo__Aurora-GT__09_1066273702541087.jpg,_IMG/Aurora_GT/09_1066273702541087.jpg
+C7_DESEO,deseo,Aurora GT,7,1,SI,C7_DESEO/deseo__Aurora-GT__04_3288954141307567.jpg,_IMG/Aurora_GT/04_3288954141307567.jpg
+C7_DESEO,deseo,Aurora GT,7,1,SI,C7_DESEO/deseo__Aurora-GT__16_1676706823435900.jpg,_IMG/Aurora_GT/16_1676706823435900.jpg
+C7_DESEO,deseo,Aurora GT,7,1,SI,C7_DESEO/deseo__Aurora-GT__18_1638169037638906.jpg,_IMG/Aurora_GT/18_1638169037638906.jpg
+C7_DESEO,deseo,Aurora GT,7,2,SI,C7_DESEO/deseo__Aurora-GT__01_1496472259170835.jpg,_IMG/Aurora_GT/01_1496472259170835.jpg
+C8_PROGRESION,progresion,Doa Oferta,16,1,SI,C8_PROGRESION/progresion__Doa-Oferta__05_4261212304096564.jpg,_IMG/Doa_Oferta/05_4261212304096564.jpg
+C8_PROGRESION,progresion,Doa Oferta,16,1,SI,C8_PROGRESION/progresion__Doa-Oferta__06_2304922313581923.jpg,_IMG/Doa_Oferta/06_2304922313581923.jpg
+C8_PROGRESION,progresion,Dona Oferta,16,1,SI,C8_PROGRESION/progresion__Dona-Oferta__03_1027488603536936.jpg,_IMG/Dona_Oferta/03_1027488603536936.jpg
+C8_PROGRESION,progresion,Tiendas KetsalStore,3,2,SI,C8_PROGRESION/progresion__Tiendas-KetsalStore__13_1788681988936855.jpg,_IMG/Tiendas_KetsalStore/13_1788681988936855.jpg
+C8_PROGRESION,progresion,Tiendas KetsalStore,3,2,SI,C8_PROGRESION/progresion__Tiendas-KetsalStore__17_1043923548227651.jpg,_IMG/Tiendas_KetsalStore/17_1043923548227651.jpg
+C8_PROGRESION,progresion,Tiendas KetsalStore,3,2,SI,C8_PROGRESION/progresion__Tiendas-KetsalStore__25_1049875981073548.jpg,_IMG/Tiendas_KetsalStore/25_1049875981073548.jpg
+C8_PROGRESION,progresion,Tiendas KetsalStore,3,2,SI,C8_PROGRESION/progresion__Tiendas-KetsalStore__29_1304415972751500.jpg,_IMG/Tiendas_KetsalStore/29_1304415972751500.jpg
+C9_COMPARACION,yo-sin-yo-con,Mi Camino al Bienestar,9,1,SI,C9_COMPARACION/yo-sin-yo-con__Mi-Camino-al-Bienestar__13_920632301090908.jpg,_IMG/Mi_Camino_al_Bienestar/13_920632301090908.jpg
+C9_COMPARACION,yo-sin-yo-con,Teyra,5,1,SI,C9_COMPARACION/yo-sin-yo-con__Teyra__09_1025480160114953.jpg,_IMG/Teyra/09_1025480160114953.jpg
+C9_COMPARACION,yo-sin-yo-con,Mi Camino al Bienestar,3,2,SI,C9_COMPARACION/yo-sin-yo-con__Mi-Camino-al-Bienestar__17_1773542093885131.jpg,_IMG/Mi_Camino_al_Bienestar/17_1773542093885131.jpg
+C9_COMPARACION,falsa-vs-real,Doctora Patricia Morales,1,2,SI,C9_COMPARACION/falsa-vs-real__Doctora-Patricia-Moral__17_1621429326017571.jpg,_IMG/Doctora_Patricia_Morales/17_1621429326017571.jpg
+C9_COMPARACION,vs-alternativa,Topishop,1,1,SI,C9_COMPARACION/vs-alternativa__Topishop__08_28219289081058505.jpg,_IMG/Topishop/08_28219289081058505.jpg
