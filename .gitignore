@@ -9,6 +9,12 @@ venv/
 .venv/
 ENV/
 
+# Local generated data
+data/
+*.db
+*.db-wal
+*.db-shm
+
 # Secrets & Local Config
 .env
 .env.local
