@@ -1,42 +1,107 @@
-# SISTEMA INDEPENDIENTE — ANÁLISIS Y BANCO DE ANUNCIOS DE COMPETENCIA (GT)
+# SISTEMA ADS COMPETENCIA
 
-Módulo autónomo para cosecha, filtrado algorítmico, clasificación y análisis de creativos ganadores de Meta Ad Library (mercado Guatemala / Bienestar).
+Sistema local para conservar, normalizar y revisar anuncios de competencia de Meta Ad Library (Guatemala). La fuente de verdad es una base SQLite canónica; los datos crudos, imágenes y documentos de investigación se conservan como evidencia.
 
----
+El producto activo es la aplicación `ads_intel`. Los antiguos scripts de descarga, galerías HTML y documentos operativos fueron retirados; su contenido quedó respaldado en los ZIP de recuperación descritos abajo.
 
-## 1. Visualizadores listos para usar (Doble clic)
+## Requisitos
 
-- **`_WINNERS.html`**: Visualizador de los **111 creativos favoritos** ya clasificados por concepto (Beneficios, Transformación, Prueba, etc.). Requiere estar en esta carpeta para leer las imágenes de `_IMG/`.
-- **`_WINNERS_PORTABLE.html`**: Versión 100% portable con imágenes embebidas en Base64 (ideal para compartir o mover de máquina sin perder referencias).
-- **`_GALERIA.html`**: Galería completa de la cosecha (más de 400 anuncios) con filtros por anunciante, ranking, días activos y cuadrantes.
+- Python 3.11 o superior.
+- Dependencia de miniaturas y firmas visuales:
 
----
+```text
+python -m pip install -r requirements.txt
+```
 
-## 2. Estructura de carpetas y datos
+## Punto de entrada
 
-| Carpeta / Archivo | Contenido |
+Todos los comandos de la aplicación se ejecutan con un único punto de entrada:
+
+```text
+python -m ads_intel.cli --help
+```
+
+La base por defecto es `data/ads_intel.db`. Las migraciones se aplican automáticamente al abrir la base. Antes de migrar o reprocesar datos reales, cree un respaldo recuperable.
+
+## Flujo de trabajo
+
+```text
+python -m ads_intel.cli freeze
+python -m ads_intel.cli import
+python -m ads_intel.cli reconcile
+python -m ads_intel.cli review-seed
+python -m ads_intel.cli review-list --status pending
+python -m ads_intel.cli visual-scan --threshold 8
+python -m ads_intel.cli visual-list --limit 50
+```
+
+- `freeze`: genera el manifiesto de archivos y un respaldo verificable.
+- `import`: importa los CSV y documentos canónicos a SQLite de forma idempotente.
+- `reconcile`: compara los conteos de la base con los archivos de origen.
+- `review-seed`: crea la cola de revisión humana.
+- `visual-scan`: calcula firmas dHash, miniaturas y pares candidatos para una ejecución nueva.
+- `all`: ejecuta `freeze` e `import` en secuencia.
+
+## Derechos, revisión y exportación
+
+Los derechos de fuente, activo y claim empiezan como desconocidos o pendientes. Ningún valor se aprueba automáticamente.
+
+```text
+python -m ads_intel.cli review-record --object asset --object-id 1 --status unknown
+python -m ads_intel.cli review-decide --item-id 1 --status resolved --decision "..." --reviewer "..."
+python -m ads_intel.cli export-check --object asset --object-id 1
+```
+
+`export-check` falla si el objeto no tiene evidencia aprobada, revisor y fecha. Los estados `unknown` y `evidence_needed` son válidos y quedan registrados; no equivalen a una aprobación.
+
+## Similitud visual
+
+La firma usa `dhash` versión `1` (64 bits, distancia Hamming). Un par con distancia menor o igual al umbral es solo un candidato pendiente: no se borra, fusiona ni declara duplicado. Cada ejecución de `visual-scan` queda identificada por su `scan_run_id`; la vista vigente muestra únicamente los candidatos del último escaneo con el umbral solicitado.
+
+```text
+python -m ads_intel.cli visual-runs
+python -m ads_intel.cli visual-list --run-id 2 --threshold 8
+```
+
+El umbral inicial es 8 y no está calibrado contra una verdad humana. Las miniaturas viven en `data/visual_thumbnails/`, fuera de Git.
+
+## Respaldo y restauración
+
+`backup` crea tres inventarios (código activo, datos operativos y recuperación completa), un snapshot consistente de SQLite y un ZIP, y verifica hashes, integridad y claves foráneas.
+
+```text
+python -m ads_intel.cli backup
+python -m ads_intel.cli restore data/backups/phase2_recovery_<fecha>.zip data/restored
+```
+
+Los respaldos y manifiestos se escriben en `data/backups/` y `data/manifests/`. Los ZIP incluyen el código, los datos y una copia de los archivos heredados retirados.
+
+## Estructura
+
+| Ruta | Contenido |
 |---|---|
-| `_IMG/` | Imágenes descargadas de competidores organizadas por anunciante. |
-| `_RAW/` | Batches crudos extraídos de Meta Ad Library en formato masivo. |
-| `_BLUEPRINTS/` | Estructuras visuales maestras y 22 blueprints canónicos validados. |
-| `_BANCO_CREATIVOS/` | Banco de creativos segmentado por concepto (`C1_OFERTA` a `C9_COMPARACION`). |
-| `ANALISIS/` | Documentos maestros de evidencia, taxonomía y metodología: <br>• `CATALOGO_CONCEPTOS_EVIDENCIA.md`<br>• `INVESTIGACION_MERCADO_FASE01_BASES_VS_SISTEMA.md`<br>• `MATRIZ_METODOLOGIA.md`<br>• `PLANTILLAS_ADS.md` y secciones. |
-| `_BANCO.csv`, `_ADS.csv` | Índices de metadatos, réplicas, días y posición por impresiones. |
-| `_CLASIF_FAVORITOS.csv` | Clasificación final de los creativos ganadores. |
-| `_PAGINAS.csv` | Directorio de páginas competidoras monitoreadas. |
+| `ads_intel/` | Aplicación, migraciones y lógica de importación, revisión, similitud e inventarios. |
+| `tests/` | Pruebas funcionales con bases temporales. |
+| `scripts/full_snapshot.py` | Envoltorio de automatización para `ads_intel.cli backup`. |
+| `_ADS.csv`, `_BANCO.csv`, `_COPIES.csv`, `_ETIQUETAS_MANUALES.csv` | Metadatos canónicos de anuncios, copias y etiquetas. |
+| `_PAGINAS.csv`, `_RANKING_CUENTAS.csv`, `_SELECCION_EXTRACCION.csv` | Directorio de páginas, ranking y selección. |
+| `_CATALOGO_CONCEPTOS.md` | Catálogo de conceptos que consume el importador. |
+| `_IMG/` | Imágenes de anuncios, conservadas como evidencia. |
+| `_BANCO_CREATIVOS/` | Creativos de referencia y su índice. |
+| `_BLUEPRINTS/` | Fichas y esquemas de análisis. |
+| `_RAW/` | Exportaciones crudas de Meta Ad Library. |
+| `ANALISIS/` | Investigación, metodología y documentos de evidencia. |
+| `data/` | Base SQLite, manifiestos, respaldos y miniaturas; ignorada por Git. |
 
----
+## Pruebas
 
-## 3. Pipeline de Extracción y Actualización
+```text
+python -m unittest discover -s tests -v
+```
 
-1. **Extracción en Meta Ad Library**:
-   - Abrir Meta Ad Library en un navegador con sesión activa.
-   - Inyectar el script [`_EXTRACTOR.js`](_EXTRACTOR.js) en la consola o herramienta de navegador.
-   - Extraer la estructura del JSON interno (`search_results_connection`).
-2. **Descarga y Deduplicación**:
-   - Guardar el bloque en `_RAW/masivo/`.
-   - Ejecutar `python bajar2.py` (descarga imágenes deduplicando por hash MD5).
-3. **Regeneración de Galerías**:
-   - Ejecutar `python gen_galeria.py` para recalcular el score de supervivencia:
-     $$\text{Score} = \text{escalado} \times 20 + (15 \text{ si días} \ge 21) + \text{velocidad}$$
-   - Ejecutar `python gen_winners.py` para refrescar `_WINNERS.html`.
+## Límites conocidos
+
+- Los 597 activos permanecen con derechos `unknown` y la fuente con permiso `pending_review` hasta revisión humana.
+- Existen 22 elementos de revisión pendientes; no se aprueban por defecto.
+- Los pares visuales son candidatos, no identidades ni duplicados confirmados.
+- El umbral de similitud requiere calibración con decisiones humanas antes de usarse como criterio de deduplicación.

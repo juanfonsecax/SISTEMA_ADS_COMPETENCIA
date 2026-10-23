@@ -106,6 +106,38 @@ def iter_glob_files(root: Path, patterns: Iterable[str]) -> list[Path]:
     return [found[key] for key in sorted(found)]
 
 
+def git_tracked_files(root: Path) -> list[Path]:
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=root,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return [root / name for name in result.stdout.decode("utf-8").split("\0") if name]
+
+
+def git_untracked_files(root: Path) -> list[Path]:
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+            cwd=root,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return [root / name for name in result.stdout.decode("utf-8").split("\0") if name]
+
+
 def git_head(root: Path) -> str | None:
     try:
         result = subprocess.run(

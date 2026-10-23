@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from .util import canonical_json
@@ -27,6 +28,11 @@ TABLES = (
     "import_issue",
     "job_run",
     "audit_event",
+    "review_event",
+    "review_item",
+    "asset_visual_signature",
+    "visual_similarity_candidate",
+    "visual_scan_run",
 )
 
 EXPECTED = {
@@ -146,13 +152,34 @@ def db_counts(connection) -> dict[str, int]:
             "SELECT COUNT(*) AS n FROM reference_document WHERE kind = 'blueprint_filled_t01'"
         ).fetchone()["n"]
     )
+    counts["assets_unknown_rights"] = int(
+        connection.execute("SELECT COUNT(*) AS n FROM asset WHERE rights_status = 'unknown'").fetchone()["n"]
+    )
+    counts["review_items_pending"] = int(
+        connection.execute("SELECT COUNT(*) AS n FROM review_item WHERE status = 'pending'").fetchone()["n"]
+    )
+    counts["visual_signatures"] = int(
+        connection.execute("SELECT COUNT(*) AS n FROM asset_visual_signature").fetchone()["n"]
+    )
+    counts["visual_candidates_pending"] = int(
+        connection.execute(
+            "SELECT COUNT(*) AS n FROM visual_similarity_candidate WHERE review_status = 'pending'"
+        ).fetchone()["n"]
+    )
+    counts["catalog_versions"] = int(
+        connection.execute(
+            "SELECT COUNT(*) AS n FROM reference_document WHERE kind = 'catalog'"
+        ).fetchone()["n"]
+    )
     return counts
 
 
-def build_report(connection) -> dict[str, Any]:
+def build_report(connection, root: Path | None = None) -> dict[str, Any]:
     counts = db_counts(connection)
     checks = []
     for key, expected in EXPECTED.items():
+        if key == "reference_document":
+            expected += max(0, counts["catalog_versions"] - 1)
         actual = counts.get(key, 0)
         checks.append({"name": key, "expected": expected, "actual": actual, "ok": actual == expected})
     extra_checks = [
@@ -174,6 +201,21 @@ def build_report(connection) -> dict[str, Any]:
     for check in extra_checks:
         check["ok"] = check["actual"] == check["expected"]
         checks.append(check)
+    if root is not None:
+        missing_paths = [
+            row["storage_key"]
+            for row in connection.execute("SELECT storage_key FROM asset ORDER BY id")
+            if not (root / row["storage_key"]).is_file()
+        ]
+        checks.append(
+            {
+                "name": "asset_paths_missing",
+                "expected": 0,
+                "actual": len(missing_paths),
+                "ok": not missing_paths,
+                "paths": missing_paths,
+            }
+        )
     issues = [
         dict(row)
         for row in connection.execute(
@@ -184,6 +226,12 @@ def build_report(connection) -> dict[str, Any]:
         "counts": counts,
         "checks": checks,
         "issues": issues,
+        "phase2": {
+            "assets_unknown_rights": counts["assets_unknown_rights"],
+            "review_items_pending": counts["review_items_pending"],
+            "visual_signatures": counts["visual_signatures"],
+            "visual_candidates_pending": counts["visual_candidates_pending"],
+        },
         "ok": all(check["ok"] for check in checks),
     }
 

@@ -30,8 +30,7 @@
 | `C7_DESEO` | 5 | **las 5 son de Aurora GT.** Un solo anunciante: tratar como hipótesis |
 | `C1_OFERTA` | 2 | |
 | `C3_SINTOMA` | 2 | |
-
-Falta `C9_COMPARACION` — está en los favoritos (`Yo SIN :( / Yo CON :)` de Mi Camino al Bienestar y Teyra, `FALSA|REAL` de Doctora Patricia) pero no entró en esta tanda.
+| `C9_COMPARACION` | 5 | `Yo SIN :( / Yo CON :)`, `FALSA|REAL` y variantes de comparación |
 
 ---
 

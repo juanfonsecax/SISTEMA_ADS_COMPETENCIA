@@ -4,11 +4,41 @@ import argparse
 import json
 from pathlib import Path
 
-from .config import DEFAULT_BACKUP_DIR, DEFAULT_DB_PATH, DEFAULT_MANIFEST_PATH, REPO_ROOT
-from .db import connect
+from .config import (
+    DEFAULT_BACKUP_DIR,
+    DEFAULT_DB_PATH,
+    DEFAULT_MANIFEST_PATH,
+    REPO_ROOT,
+)
+from .db import apply_migrations, connect
+from .governance import (
+    ApprovalError,
+    assert_exportable,
+    record_asset_rights_review,
+    record_claim_review,
+    record_source_review,
+)
 from .importers import import_all
+from .inventory import create_recovery_backup, restore_recovery_backup
 from .manifest import freeze
 from .reconcile import build_report
+from .review import list_review_items, record_review_decision, seed_review_queue
+from .visuals import (
+    DEFAULT_THRESHOLD,
+    list_visual_candidates,
+    list_visual_scan_runs,
+    scan_visual_similarity,
+)
+
+
+def _print(value: object) -> None:
+    print(json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True))
+
+
+def _connection(args: argparse.Namespace):
+    connection = connect(Path(args.db).resolve())
+    apply_migrations(connection)
+    return connection
 
 
 def _freeze(args: argparse.Namespace) -> int:
@@ -19,24 +49,185 @@ def _freeze(args: argparse.Namespace) -> int:
         include_images=not args.no_images,
         do_backup=not args.no_backup,
     )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    _print(result)
     return 0
 
 
 def _import(args: argparse.Namespace) -> int:
     counts = import_all(Path(args.root).resolve(), Path(args.db).resolve())
-    print(json.dumps(counts, ensure_ascii=False, indent=2, sort_keys=True))
+    _print(counts)
     return 0
 
 
 def _reconcile(args: argparse.Namespace) -> int:
-    connection = connect(Path(args.db).resolve())
+    connection = _connection(args)
     try:
-        report = build_report(connection)
+        report = build_report(connection, root=Path(args.root).resolve())
     finally:
         connection.close()
-    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    _print(report)
     return 0 if report["ok"] else 1
+
+
+def _review_seed(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        with connection:
+            inserted = seed_review_queue(connection, Path(args.root).resolve())
+        items = list_review_items(connection)
+    finally:
+        connection.close()
+    _print({"inserted": inserted, "total": len(items)})
+    return 0
+
+
+def _review_list(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        items = list_review_items(connection, status=args.status, category=args.category)
+    finally:
+        connection.close()
+    _print(items)
+    return 0
+
+
+def _review_decide(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        if not args.decision or not args.reviewer:
+            raise ValueError("--decision and --reviewer are required")
+        record_review_decision(
+            connection,
+            args.item_id,
+            status=args.status,
+            decision=args.decision,
+            reviewer=args.reviewer,
+            notes=args.notes,
+            reviewed_at=args.reviewed_at,
+        )
+        items = [item for item in list_review_items(connection) if item["id"] == args.item_id]
+    finally:
+        connection.close()
+    _print(items[0] if items else {"item_id": args.item_id, "updated": True})
+    return 0
+
+
+def _review_record(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        if args.object == "source":
+            event_id = record_source_review(
+                connection,
+                args.object_id,
+                status=args.status,
+                permission_basis=args.permission_basis,
+                evidence_ref=args.evidence_ref[0] if args.evidence_ref else None,
+                reviewer=args.reviewer,
+                reviewed_at=args.reviewed_at,
+                notes=args.notes,
+            )
+        elif args.object == "asset":
+            event_id = record_asset_rights_review(
+                connection,
+                args.object_id,
+                status=args.status,
+                evidence_ref=args.evidence_ref[0] if args.evidence_ref else None,
+                reviewer=args.reviewer,
+                reviewed_at=args.reviewed_at,
+                notes=args.notes,
+            )
+        elif args.object == "claim":
+            event_id = record_claim_review(
+                connection,
+                args.object_id,
+                status=args.status,
+                evidence_refs=args.evidence_ref,
+                reviewer=args.reviewer,
+                reviewed_at=args.reviewed_at,
+                notes=args.notes,
+            )
+        else:
+            raise ValueError(f"Unsupported object: {args.object}")
+    finally:
+        connection.close()
+    _print({"event_id": event_id, "object": args.object, "object_id": args.object_id})
+    return 0
+
+
+def _export_check(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        assert_exportable(connection, args.object, args.object_id)
+    except ApprovalError as exc:
+        _print({"exportable": False, "object": args.object, "object_id": args.object_id, "reason": str(exc)})
+        return 1
+    finally:
+        connection.close()
+    _print({"exportable": True, "object": args.object, "object_id": args.object_id})
+    return 0
+
+
+def _visual_scan(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        root = Path(args.root).resolve()
+        result = scan_visual_similarity(
+            connection,
+            root,
+            threshold=args.threshold,
+            thumbnail_root=Path(args.thumbnails).resolve()
+            if args.thumbnails
+            else root / "data" / "visual_thumbnails",
+        )
+    finally:
+        connection.close()
+    _print(result)
+    return 0 if not result["failed"] else 1
+
+
+def _visual_list(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        candidates = list_visual_candidates(
+            connection,
+            run_id=args.run_id,
+            threshold=args.threshold,
+            limit=args.limit,
+        )
+    finally:
+        connection.close()
+    _print(candidates)
+    return 0
+
+
+def _visual_runs(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        runs = list_visual_scan_runs(connection, limit=args.limit)
+    finally:
+        connection.close()
+    _print(runs)
+    return 0
+
+
+def _backup(args: argparse.Namespace) -> int:
+    result = create_recovery_backup(
+        Path(args.root).resolve(),
+        Path(args.backup_dir).resolve(),
+        manifest_dir=Path(args.manifest).resolve().parent,
+        db_path=Path(args.db).resolve(),
+    )
+    _print(result)
+    return 0 if result["ok"] else 1
+
+
+def _restore(args: argparse.Namespace) -> int:
+    result = restore_recovery_backup(
+        Path(args.archive).resolve(),
+        Path(args.target).resolve(),
+    )
+    _print(result)
+    return 0
 
 
 def _all(args: argparse.Namespace) -> int:
@@ -48,7 +239,7 @@ def _all(args: argparse.Namespace) -> int:
         do_backup=not args.no_backup,
     )
     counts = import_all(Path(args.root).resolve(), Path(args.db).resolve())
-    print(json.dumps(counts, ensure_ascii=False, indent=2, sort_keys=True))
+    _print(counts)
     return 0
 
 
@@ -70,6 +261,72 @@ def build_parser() -> argparse.ArgumentParser:
 
     reconcile_parser = subparsers.add_parser("reconcile", help="Check canonical counts")
     reconcile_parser.set_defaults(func=_reconcile)
+
+    review_seed = subparsers.add_parser("review-seed", help="Create pending human-review items")
+    review_seed.set_defaults(func=_review_seed)
+
+    review_list = subparsers.add_parser("review-list", help="List human-review items")
+    review_list.add_argument("--status", choices=["pending", "in_review", "needs_evidence", "resolved", "rejected"])
+    review_list.add_argument("--category")
+    review_list.set_defaults(func=_review_list)
+
+    review_decide = subparsers.add_parser("review-decide", help="Record a human review decision")
+    review_decide.add_argument("--item-id", type=int, required=True)
+    review_decide.add_argument(
+        "--status",
+        required=True,
+        choices=["in_review", "needs_evidence", "resolved", "rejected"],
+    )
+    review_decide.add_argument("--decision", required=True)
+    review_decide.add_argument("--reviewer", required=True)
+    review_decide.add_argument("--notes")
+    review_decide.add_argument("--reviewed-at")
+    review_decide.set_defaults(func=_review_decide)
+
+    review_record = subparsers.add_parser("review-record", help="Record a source, asset, or claim review")
+    review_record.add_argument("--object", required=True, choices=["source", "asset", "claim"])
+    review_record.add_argument("--object-id", type=int, required=True)
+    review_record.add_argument(
+        "--status",
+        required=True,
+        choices=["pending", "approved", "restricted", "rejected", "needs_evidence", "evidence_needed", "unknown"],
+    )
+    review_record.add_argument("--permission-basis")
+    review_record.add_argument("--evidence-ref", action="append")
+    review_record.add_argument("--reviewer")
+    review_record.add_argument("--reviewed-at")
+    review_record.add_argument("--notes")
+    review_record.set_defaults(func=_review_record)
+
+    export_check = subparsers.add_parser("export-check", help="Fail unless an object has approved evidence")
+    export_check.add_argument("--object", required=True, choices=["source", "asset", "claim"])
+    export_check.add_argument("--object-id", type=int, required=True)
+    export_check.set_defaults(func=_export_check)
+
+    visual_scan = subparsers.add_parser("visual-scan", help="Compute hashes, thumbnails, and candidate pairs")
+    visual_scan.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD)
+    visual_scan.add_argument("--thumbnails")
+    visual_scan.set_defaults(func=_visual_scan)
+
+    visual_list = subparsers.add_parser("visual-list", help="List current or historical visual candidates")
+    visual_list.add_argument("--run-id", type=int, help="Inspect a specific historical scan run")
+    visual_list.add_argument("--threshold", type=int)
+    visual_list.add_argument("--limit", type=int)
+    visual_list.set_defaults(func=_visual_list)
+
+    visual_runs = subparsers.add_parser("visual-runs", help="List visual scan runs")
+    visual_runs.add_argument("--limit", type=int)
+    visual_runs.set_defaults(func=_visual_runs)
+
+    backup_parser = subparsers.add_parser(
+        "backup", help="Create and verify a full code, data, and database recovery backup"
+    )
+    backup_parser.set_defaults(func=_backup)
+
+    restore_parser = subparsers.add_parser("restore", help="Extract a recovery backup")
+    restore_parser.add_argument("archive")
+    restore_parser.add_argument("target")
+    restore_parser.set_defaults(func=_restore)
 
     all_parser = subparsers.add_parser("all", help="Freeze and import")
     all_parser.add_argument("--no-images", action="store_true")

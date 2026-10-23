@@ -8,17 +8,18 @@ from typing import Any
 from .config import (
     AD_FILES,
     LEGACY_BACKUP_GLOBS,
-    LEGACY_INPUT_FILES,
-    LEGACY_JSON_GLOBS,
     LEGACY_RAW_GLOBS,
 )
 from .jpeg import is_jpeg, jpeg_dimensions
 from .util import (
     git_head,
+    git_tracked_files,
+    git_untracked_files,
     iter_glob_files,
     md5_file,
     normalize_relpath,
     read_csv_rows,
+    read_json,
     sha256_bytes,
     sha256_file,
     utc_now,
@@ -106,37 +107,115 @@ def _unique_values(path: Path, key: str) -> int:
     return len({row.get(key, "").strip() for row in read_csv_rows(path) if row.get(key, "").strip()})
 
 
+def _category_for_path(path: str) -> str:
+    if path == ".gitignore":
+        return "config"
+    if path.startswith("_IMG/"):
+        return "image"
+    if path.startswith("_BANCO_CREATIVOS/"):
+        if path.endswith(".csv"):
+            return "reference_index"
+        if path.endswith(".md"):
+            return "reference_document"
+        return "reference_asset"
+    if path.startswith("_RAW/"):
+        return "raw_capture"
+    if path.startswith("ANALISIS/"):
+        return "research"
+    if path.startswith("tests/"):
+        return "test"
+    if path.startswith("odd/"):
+        return "governance"
+    if path.startswith("ads_intel/"):
+        return "code"
+    if path.startswith("_BLUEPRINTS/"):
+        if path.endswith((".json", ".csv")) or "/FICHAS/" in path or "/CANONICOS/" in path:
+            return "blueprint_or_ficha"
+        return "blueprint_source"
+    if path.endswith((".py", ".js")):
+        return "legacy_code"
+    if path.endswith((".html", ".css", ".js")):
+        return "generated_view"
+    if path.endswith((".md", ".txt")):
+        return "documentation"
+    return "source_data"
+
+
+def _candidate_paths(root: Path) -> list[Path]:
+    tracked = git_tracked_files(root)
+    untracked = git_untracked_files(root)
+    if tracked or untracked:
+        return tracked + untracked
+    ignored = (".git/", "data/", "__pycache__/")
+    return [
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and not normalize_relpath(root, path).startswith(ignored)
+        and path.suffix.lower() not in {".pyc", ".pyo"}
+    ]
+
+
 def build_manifest(root: Path, include_images: bool = True) -> dict[str, Any]:
-    paths = iter_glob_files(root, LEGACY_INPUT_FILES)
-    paths.extend(iter_glob_files(root, LEGACY_JSON_GLOBS))
-    paths.extend(iter_glob_files(root, LEGACY_RAW_GLOBS))
-    deduped: dict[str, Path] = {normalize_relpath(root, path): path for path in paths}
+    tracked_paths = {path.resolve() for path in git_tracked_files(root)}
+    candidate_paths = _candidate_paths(root)
+    deduped: dict[str, Path] = {}
+    for path in candidate_paths:
+        if path.exists():
+            deduped[normalize_relpath(root, path)] = path
+
     files = []
+    images = []
+    reference_assets = []
     for key in sorted(deduped):
         path = deduped[key]
+        scope = "tracked" if path.resolve() in tracked_paths else "untracked"
+        if key.startswith("_IMG/") and path.suffix.lower() in IMAGE_SUFFIXES:
+            if include_images:
+                item = _image_metadata(root, path)
+                item.update({"scope": scope, "category": "image"})
+                images.append(item)
+            continue
+        if key.startswith("_BANCO_CREATIVOS/") and path.suffix.lower() in IMAGE_SUFFIXES:
+            item = _image_metadata(root, path)
+            item.update({"scope": scope, "category": "reference_asset"})
+            reference_assets.append(item)
+            continue
         files.append(
             {
                 "path": key,
                 "bytes": path.stat().st_size,
                 "sha256": sha256_file(path),
                 "kind": _classify_legacy_file(key),
+                "category": _category_for_path(key),
+                "scope": scope,
             }
         )
 
-    images = []
-    if include_images:
-        for path in sorted((root / "_IMG").rglob("*")):
-            if not path.is_file() or path.suffix.lower() not in IMAGE_SUFFIXES:
-                continue
-            images.append(_image_metadata(root, path))
-
     ficha_manifest = root / "_BLUEPRINTS" / "FICHAS" / "_MANIFIESTO.csv"
     refs_index = root / "_BANCO_CREATIVOS" / "_INDICE.csv"
+    total = len(files) + len(images) + len(reference_assets)
+    tracked_total = sum(
+        1 for item in files + images + reference_assets if item["scope"] == "tracked"
+    )
+    untracked_total = total - tracked_total
+    by_category: dict[str, int] = {}
+    for item in files + images + reference_assets:
+        category = item["category"]
+        by_category[category] = by_category.get(category, 0) + 1
     counts = {
         "files": len(files),
         "images": len(images),
+        "reference_assets": len(reference_assets),
+        "tracked": tracked_total,
+        "untracked": untracked_total,
+        "tracked_total": tracked_total,
+        "total": total,
+        "total_bytes": sum(item["bytes"] for item in files + images + reference_assets),
         "image_bytes": sum(item["bytes"] for item in images),
+        "reference_bytes": sum(item["bytes"] for item in reference_assets),
         "images_with_dimensions": sum(1 for item in images if item["width"] and item["height"]),
+        "by_category": by_category,
         "ads_rows": sum(_count_csv(root / name) for name in AD_FILES),
         "ads_unique": len(
             {
@@ -161,12 +240,13 @@ def build_manifest(root: Path, include_images: bool = True) -> dict[str, Any]:
         "filled_blueprint_json": len(list((root / "_BLUEPRINTS").glob("LLENO_T01_*.json"))),
     }
     return {
-        "schema": "legacy-manifest-v1",
+        "schema": "legacy-manifest-v2",
         "generated_at": utc_now(),
         "repo_head": git_head(root),
         "root_name": root.name,
         "files": files,
         "images": images,
+        "reference_assets": reference_assets,
         "counts": counts,
     }
 
@@ -175,15 +255,37 @@ def write_manifest(manifest: dict[str, Any], path: Path) -> None:
     write_json(path, manifest)
 
 
-def create_backup(root: Path, destination: Path, manifest_path: Path | None = None) -> Path:
+def create_backup(
+    root: Path,
+    destination: Path,
+    manifest_path: Path | None = None,
+    include_images: bool = False,
+    manifest: dict[str, Any] | None = None,
+) -> Path:
     destination.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     archive_path = destination / f"legacy_snapshot_{stamp}.zip"
-    paths = iter_glob_files(root, LEGACY_BACKUP_GLOBS + LEGACY_RAW_GLOBS)
+    counter = 1
+    while archive_path.exists():
+        archive_path = destination / f"legacy_snapshot_{stamp}_{counter}.zip"
+        counter += 1
+    if manifest is None and manifest_path and manifest_path.exists():
+        manifest = read_json(manifest_path)
+    if manifest:
+        relative_paths = [item["path"] for item in manifest.get("files", [])]
+        relative_paths.extend(item["path"] for item in manifest.get("reference_assets", []))
+        if include_images:
+            relative_paths.extend(item["path"] for item in manifest.get("images", []))
+        paths = [root / relative for relative in relative_paths if (root / relative).is_file()]
+    else:
+        paths = iter_glob_files(root, LEGACY_BACKUP_GLOBS + LEGACY_RAW_GLOBS)
+    unique: dict[str, Path] = {normalize_relpath(root, path): path for path in paths}
     with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in paths:
-            relative = normalize_relpath(root, path)
-            if relative.startswith(("_IMG/", ".git/", "data/", "__pycache__/")):
+        for relative in sorted(unique):
+            path = unique[relative]
+            if relative.startswith((".git/", "data/", "__pycache__/")):
+                continue
+            if relative.startswith("_IMG/") and not include_images:
                 continue
             if path.suffix.lower() in {".pyc", ".pyo", ".db", ".db-wal", ".db-shm"}:
                 continue
@@ -202,7 +304,11 @@ def freeze(
 ) -> dict[str, Any]:
     manifest = build_manifest(root, include_images=include_images)
     write_manifest(manifest, manifest_path)
-    backup_path = create_backup(root, backup_dir, manifest_path) if do_backup else None
+    backup_path = (
+        create_backup(root, backup_dir, manifest_path, include_images=include_images, manifest=manifest)
+        if do_backup
+        else None
+    )
     return {
         "manifest_path": str(manifest_path),
         "backup_path": str(backup_path) if backup_path else None,

@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ads_intel.config import LEGACY_INPUT_FILES, LEGACY_JSON_GLOBS
+from ads_intel.config import CATALOG_CONCEPTS
 from ads_intel.db import connect
-from ads_intel.importers import import_all
+from ads_intel.importers import import_all, parse_catalog_definitions
 from ads_intel.reconcile import build_report
-from ads_intel.util import iter_glob_files, sha256_file
+from ads_intel.util import git_tracked_files, sha256_file
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +18,7 @@ class CanonicalImportTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.temp = tempfile.TemporaryDirectory()
         cls.db_path = Path(cls.temp.name) / "ads_intel.db"
-        cls.legacy_paths = iter_glob_files(ROOT, LEGACY_INPUT_FILES + LEGACY_JSON_GLOBS)
+        cls.legacy_paths = [path for path in git_tracked_files(ROOT) if path.exists()]
         cls.legacy_before = {path: sha256_file(path) for path in cls.legacy_paths}
         cls.first_counts = import_all(ROOT, cls.db_path)
         cls.second_counts = import_all(ROOT, cls.db_path)
@@ -48,6 +48,18 @@ class CanonicalImportTest(unittest.TestCase):
         self.assertEqual(counts["advertiser"], 89)
         self.assertEqual(counts["advertiser_alias"], 10)
         self.assertEqual(counts["names_total"], 95)
+        self.assertEqual(
+            self.connection.execute(
+                "SELECT COUNT(DISTINCT advertiser_id) AS n FROM ad_creative"
+            ).fetchone()["n"],
+            85,
+        )
+        self.assertEqual(
+            self.connection.execute(
+                "SELECT COUNT(*) AS n FROM advertiser WHERE id NOT IN (SELECT advertiser_id FROM ad_creative)"
+            ).fetchone()["n"],
+            4,
+        )
         advertiser = self.connection.execute(
             "SELECT id, name FROM advertiser WHERE external_page_id = '1148274688362148'"
         ).fetchone()
@@ -175,12 +187,80 @@ class CanonicalImportTest(unittest.TestCase):
         self.assertIsNotNone(cost)
         self.assertEqual((cost["value"], cost["currency"]), ("41", "Q"))
 
+    def test_catalog_parser_reads_unicode_headings(self) -> None:
+        text = (ROOT / "_CATALOGO_CONCEPTOS.md").read_text(encoding="utf-8")
+        definitions = parse_catalog_definitions(text)
+        expected = set(CATALOG_CONCEPTS) - {"SIN_CLASIFICAR"}
+        self.assertEqual(set(definitions), expected)
+        self.assertNotIn("C6", {key.split("_", 1)[0] for key in definitions})
+        for key, (label, definition) in definitions.items():
+            self.assertTrue(label, key)
+            self.assertTrue(definition, key)
+
+    def test_catalog_definitions_are_not_null(self) -> None:
+        rows = self.connection.execute(
+            """
+            SELECT tag_key, label, definition
+            FROM tag_definition
+            WHERE dimension = 'concepto' AND tag_key != 'SIN_CLASIFICAR'
+            ORDER BY tag_key
+            """
+        ).fetchall()
+        self.assertEqual(len(rows), len(CATALOG_CONCEPTS) - 1)
+        for row in rows:
+            self.assertTrue(row["label"], row["tag_key"])
+            self.assertTrue(row["definition"], row["tag_key"])
+        self.assertEqual(
+            self.connection.execute(
+                "SELECT COUNT(*) AS n FROM tag_definition WHERE dimension = 'concepto' AND tag_key LIKE 'C6%'"
+            ).fetchone()["n"],
+            0,
+        )
+
+    def test_images_and_references_are_complete(self) -> None:
+        images = sorted((ROOT / "_IMG").rglob("*.jpg"))
+        hashes = [sha256_file(path) for path in images]
+        self.assertEqual(len(images), 597)
+        self.assertEqual(len(set(hashes)), 597)
+        references = sorted((ROOT / "_BANCO_CREATIVOS").rglob("*.jpg"))
+        self.assertEqual(len(references), 48)
+        self.assertTrue(all(sha256_file(path) in set(hashes) for path in references))
+        missing = [
+            row["storage_key"]
+            for row in self.connection.execute("SELECT storage_key FROM asset")
+            if not (ROOT / row["storage_key"]).is_file()
+        ]
+        self.assertEqual(missing, [])
+
     def test_legacy_files_are_byte_identical(self) -> None:
         self.assertEqual(self.legacy_before, self.legacy_after)
 
     def test_issues_are_visible(self) -> None:
         self.assertEqual(self.report["counts"]["import_issue"], 10)
         self.assertEqual(len(self.report["issues"]), 10)
+
+    def test_review_queue_is_pending_and_idempotent(self) -> None:
+        counts = self.report["counts"]
+        self.assertEqual(counts["review_item"], 22)
+        self.assertEqual(counts["review_items_pending"], 22)
+        rows = self.connection.execute("SELECT status, decision FROM review_item").fetchall()
+        self.assertEqual({row["status"] for row in rows}, {"pending"})
+        self.assertEqual({row["decision"] for row in rows}, {None})
+        keys = {
+            row["item_key"]
+            for row in self.connection.execute("SELECT item_key FROM review_item")
+        }
+        self.assertIn("source:1:permission", keys)
+        self.assertIn("assets:rights_unknown", keys)
+        self.assertIn("taxonomy:c6_retired", keys)
+        self.assertIn("documentation:fda_mspas_conflict", keys)
+        self.assertIn("page:1125291077325276:reported_active_without_creatives", keys)
+        self.assertEqual(
+            self.connection.execute(
+                "SELECT COUNT(*) AS n FROM review_item WHERE category = 'claim'"
+            ).fetchone()["n"],
+            7,
+        )
 
 
 if __name__ == "__main__":

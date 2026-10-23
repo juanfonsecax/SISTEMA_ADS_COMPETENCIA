@@ -43,6 +43,22 @@ CATALOG_KEY_BY_NUMBER = {
     "C9": "C9_COMPARACION",
 }
 
+CATALOG_HEADING_RE = re.compile(
+    r"^###\s+(C\d+)\s*[—–-]\s*([^\n]+)\n+>\s*([^\n]+)",
+    re.MULTILINE,
+)
+
+
+def parse_catalog_definitions(text: str) -> dict[str, tuple[str, str]]:
+    """Extract canonical concept labels and definitions from the catalog source."""
+    definitions: dict[str, tuple[str, str]] = {}
+    for match in CATALOG_HEADING_RE.finditer(text.lstrip("\ufeff")):
+        key = CATALOG_KEY_BY_NUMBER.get(match.group(1))
+        if key:
+            definitions[key] = (match.group(2).strip(), match.group(3).strip())
+    return definitions
+
+
 DEFAULT_DATES = {"_ADS.csv": "2026-08-17", "_BANCO.csv": "2026-08-18"}
 
 
@@ -78,6 +94,9 @@ class LegacyImporter:
         self._import_blueprints()
         self._import_product()
         self._import_summary_issues()
+        from .review import seed_review_queue
+
+        seed_review_queue(self.connection, self.root)
         counts = self._db_counts()
         self._finish_job(counts)
         return self._db_counts()
@@ -615,10 +634,7 @@ class LegacyImporter:
                 self.now,
             ),
         )
-        for match in re.finditer(r"^### (C\d+) [â€”-] ([^\n]+)\n> ([^\n]+)", text, re.MULTILINE):
-            key = CATALOG_KEY_BY_NUMBER.get(match.group(1))
-            if key:
-                self.catalog_definitions[key] = (match.group(2).strip(), match.group(3).strip())
+        self.catalog_definitions.update(parse_catalog_definitions(text))
         for key, label in CATALOG_CONCEPTS.items():
             definition = self.catalog_definitions.get(key, (label, None))[1]
             self._tag_definition("concepto", key, label, definition, "_CATALOGO_CONCEPTOS.md")
@@ -643,8 +659,18 @@ class LegacyImporter:
         source: str | None,
     ) -> int:
         cache_key = (dimension, key)
-        if cache_key in self.tag_cache:
-            return self.tag_cache[cache_key]
+        cached = self.tag_cache.get(cache_key)
+        if cached is not None:
+            if definition:
+                self.connection.execute(
+                    """
+                    UPDATE tag_definition
+                    SET definition = ?
+                    WHERE id = ? AND (definition IS NULL OR TRIM(definition) = '')
+                    """,
+                    (definition, cached),
+                )
+            return cached
         self.connection.execute(
             """
             INSERT OR IGNORE INTO tag_definition
@@ -660,6 +686,15 @@ class LegacyImporter:
         if row is None:
             raise RuntimeError(f"Could not create tag definition {dimension}:{key}")
         tag_id = int(row["id"])
+        if definition:
+            self.connection.execute(
+                """
+                UPDATE tag_definition
+                SET definition = ?
+                WHERE id = ? AND (definition IS NULL OR TRIM(definition) = '')
+                """,
+                (definition, tag_id),
+            )
         self.tag_cache[cache_key] = tag_id
         return tag_id
 

@@ -1,0 +1,2 @@
+# Phase 2 visual signatures and thumbnails. Pillow 12.3.0 was verified locally.
+Pillow>=11,<13

@@ -9,60 +9,13 @@ DATA_DIR = REPO_ROOT / "data"
 DEFAULT_DB_PATH = DATA_DIR / "ads_intel.db"
 DEFAULT_MANIFEST_PATH = DATA_DIR / "manifests" / "legacy_manifest.json"
 DEFAULT_BACKUP_DIR = DATA_DIR / "backups"
+DEFAULT_THUMBNAIL_DIR = DATA_DIR / "visual_thumbnails"
 
 SOURCE_NAME = "meta_ad_library_gt_legacy"
 SOURCE_TYPE = "manual_browser_export"
 SOURCE_PERMISSION_BASIS = "pending_review"
 
 AD_FILES = ("_ADS.csv", "_BANCO.csv")
-
-LEGACY_INPUT_FILES = (
-    "_ADS.csv",
-    "_BANCO.csv",
-    "_PAGINAS.csv",
-    "_RANKING_CUENTAS.csv",
-    "_SELECCION_EXTRACCION.csv",
-    "_ELEMENTOS.csv",
-    "_CLASIF_FAVORITOS.csv",
-    "_ETIQUETAS_MANUALES.csv",
-    "_PRECLASIFICACION.csv",
-    "_COPIES.csv",
-    "_BANCO_CREATIVOS/_INDICE.csv",
-    "_BLUEPRINTS/FICHAS/_MANIFIESTO.csv",
-    "_CATALOGO_CONCEPTOS.md",
-    "_ESTRATEGIA_CONCEPTOS.md",
-    "_METODO.md",
-    "analisis-ad-2026-08-18.md",
-    "README.md",
-    "_HANDOFF.md",
-    "_HANDOFF_CONCEPTOS.md",
-    "_PROCESADOS.txt",
-    "_PENDIENTES.txt",
-    "_VISTAS.txt",
-    "_LINKS_TANDAS.txt",
-    "_BLUEPRINTS/_LEEME.md",
-    "_BLUEPRINTS/_ESQUEMA_FICHA.md",
-    "_BLUEPRINTS/_PROMPT_LLENADOR.txt",
-    "_BLUEPRINTS/_PROMPT_RENDER.txt",
-    "_BLUEPRINTS/ficha_tinnidrop.json",
-    "_BANCO_CREATIVOS/_LEEME.md",
-    "gen_galeria.py",
-    "gen_winners.py",
-    "clasificar_conceptos.py",
-    "_codificar.py",
-    "integrar_copies.py",
-    "bajar.py",
-    "bajar2.py",
-    "dedup.py",
-    "_EXTRACTOR.js",
-)
-
-LEGACY_JSON_GLOBS = (
-    "_BLUEPRINTS/FICHAS/F*.json",
-    "_BLUEPRINTS/CANONICOS/*.json",
-    "_BLUEPRINTS/blueprint_*.json",
-    "_BLUEPRINTS/LLENO_T01_*.json",
-)
 
 LEGACY_RAW_GLOBS = ("_RAW/**/*",)
 
@@ -72,12 +25,19 @@ LEGACY_BACKUP_GLOBS = (
     "*.md",
     "*.txt",
     "*.csv",
+    "*.html",
+    "_BLUEPRINTS/**/*.py",
+    "_BLUEPRINTS/**/*.js",
     "_BLUEPRINTS/**/*.json",
     "_BLUEPRINTS/**/*.md",
     "_BLUEPRINTS/**/*.txt",
+    "_BLUEPRINTS/**/*.html",
     "_BANCO_CREATIVOS/**/*.csv",
     "_BANCO_CREATIVOS/**/*.md",
+    "_BANCO_CREATIVOS/**/*.jpg",
     "ANALISIS/**/*.md",
+    "tests/**/*.py",
+    "odd/**/*.md",
 )
 
 CATALOG_CONCEPTS = {

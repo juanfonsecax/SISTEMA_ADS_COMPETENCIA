@@ -5,7 +5,7 @@
 >
 > Sale de 133 creativos ganadores del mercado GT (36 elegidos por supervivencia + 111 elegidos por
 > el operador, 39 anunciantes). La evidencia completa (muestras, frecuencias, hipótesis descartadas,
-> choques con reglas y límites de la medición) está en `_CONOCIMIENTO/CATALOGO_CONCEPTOS_EVIDENCIA.md`.
+> choques con reglas y límites de la medición) está en `ANALISIS/CATALOGO_CONCEPTOS_EVIDENCIA.md`.
 
 ---
 
