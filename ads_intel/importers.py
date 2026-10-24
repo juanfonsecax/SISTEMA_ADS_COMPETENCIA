@@ -16,6 +16,7 @@ from .config import (
 )
 from .db import apply_migrations, connect
 from .jpeg import jpeg_dimensions
+from .taxonomy import TAXONOMY_VERSION, backfill_primary_concepts, seed_taxonomy
 from .util import (
     as_float,
     as_int,
@@ -666,9 +667,11 @@ class LegacyImporter:
                     """
                     UPDATE tag_definition
                     SET definition = ?
-                    WHERE id = ? AND (definition IS NULL OR TRIM(definition) = '')
+                    WHERE id = ? AND (
+                        definition IS NULL OR TRIM(definition) = '' OR source = ?
+                    )
                     """,
-                    (definition, cached),
+                    (definition, cached, source),
                 )
             return cached
         self.connection.execute(
@@ -691,9 +694,11 @@ class LegacyImporter:
                 """
                 UPDATE tag_definition
                 SET definition = ?
-                WHERE id = ? AND (definition IS NULL OR TRIM(definition) = '')
+                WHERE id = ? AND (
+                    definition IS NULL OR TRIM(definition) = '' OR source = ?
+                )
                 """,
-                (definition, tag_id),
+                (definition, tag_id, source),
             )
         self.tag_cache[cache_key] = tag_id
         return tag_id
@@ -714,13 +719,20 @@ class LegacyImporter:
         definition: str | None = None,
     ) -> None:
         definition_id = self._tag_definition(dimension, key, label, definition, source_file)
+        canonical_status = {
+            "auto": "suggested",
+            "imported": "pending_review",
+            "pending": "pending_review",
+        }.get(review_status, review_status)
+        legacy_status = review_status if canonical_status != review_status else None
         cursor = self.connection.execute(
             """
             INSERT OR IGNORE INTO ad_tag
                 (ad_creative_id, asset_id, tag_definition_id, confidence, confidence_label,
                  assigned_by, method, model_version, prompt_version, review_status,
-                 evidence_json, source_file, source_row, created_at)
-            VALUES (?, NULL, ?, NULL, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)
+                 evidence_json, source_file, source_row, created_at, taxonomy_version,
+                 legacy_review_status, confidence_basis, updated_at)
+            VALUES (?, NULL, ?, NULL, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 creative_id,
@@ -728,10 +740,14 @@ class LegacyImporter:
                 confidence_label,
                 assigned_by,
                 method,
-                review_status,
+                canonical_status,
                 canonical_json(evidence) if evidence is not None else None,
                 source_file,
                 source_row,
+                self.now,
+                TAXONOMY_VERSION,
+                legacy_status,
+                "legacy_label_without_numeric_confidence",
                 self.now,
             ),
         )
@@ -1280,8 +1296,11 @@ def import_all(root: Path, db_path: Path) -> dict[str, int]:
     try:
         apply_migrations(connection)
         with connection:
+            seed_taxonomy(connection, root)
             importer = LegacyImporter(connection, root)
-            return importer.run()
+            counts = importer.run()
+            backfill_primary_concepts(connection)
+            return counts
     finally:
         connection.close()
 

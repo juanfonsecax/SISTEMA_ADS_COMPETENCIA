@@ -3,7 +3,24 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .taxonomy import CANONICAL_CONCEPT_KEYS, CANONICAL_DIMENSIONS, DIMENSIONS, TAXONOMY_VERSION
 from .util import canonical_json
+
+LEGACY_TAG_DIMENSIONS = (
+    "concepto",
+    "legacy_concepto_crudo",
+    "legacy_gallery_auto",
+    "legacy_preclasificacion",
+    "curaduria",
+)
+
+LEGACY_TAG_METHODS = (
+    "manual_final",
+    "manual_curation",
+    "manual_raw",
+    "rule_text_gallery",
+    "rule_text",
+)
 
 TABLES = (
     "source",
@@ -33,6 +50,11 @@ TABLES = (
     "asset_visual_signature",
     "visual_similarity_candidate",
     "visual_scan_run",
+    "taxonomy_version",
+    "taxonomy_dimension",
+    "taxonomy_mapping",
+    "classification_run",
+    "ad_tag_event",
 )
 
 EXPECTED = {
@@ -63,6 +85,28 @@ def db_counts(connection) -> dict[str, int]:
     for table in TABLES:
         row = connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
         counts[table] = int(row["n"])
+    counts["tag_definition_total"] = counts["tag_definition"]
+    counts["ad_tag_total"] = counts["ad_tag"]
+    placeholders = ",".join("?" for _ in LEGACY_TAG_DIMENSIONS)
+    method_placeholders = ",".join("?" for _ in LEGACY_TAG_METHODS)
+    counts["tag_definition"] = int(
+        connection.execute(
+            f"SELECT COUNT(*) AS n FROM tag_definition WHERE dimension IN ({placeholders})",
+            LEGACY_TAG_DIMENSIONS,
+        ).fetchone()["n"]
+    )
+    counts["ad_tag"] = int(
+        connection.execute(
+            f"""
+            SELECT COUNT(*) AS n
+            FROM ad_tag t
+            JOIN tag_definition d ON d.id = t.tag_definition_id
+            WHERE d.dimension IN ({placeholders})
+              AND t.method IN ({method_placeholders})
+            """,
+            (*LEGACY_TAG_DIMENSIONS, *LEGACY_TAG_METHODS),
+        ).fetchone()["n"]
+    )
     counts["names_total"] = int(
         connection.execute(
             """
@@ -95,7 +139,7 @@ def db_counts(connection) -> dict[str, int]:
             """
             SELECT COUNT(*) AS n FROM ad_tag t
             JOIN tag_definition d ON d.id = t.tag_definition_id
-            WHERE d.dimension = 'concepto'
+            WHERE d.dimension = 'concepto' AND t.method = 'manual_final'
             """
         ).fetchone()["n"]
     )
@@ -171,6 +215,92 @@ def db_counts(connection) -> dict[str, int]:
             "SELECT COUNT(*) AS n FROM reference_document WHERE kind = 'catalog'"
         ).fetchone()["n"]
     )
+    canonical_placeholders = ",".join("?" for _ in CANONICAL_DIMENSIONS)
+    counts["taxonomy_tags"] = int(
+        connection.execute(
+            f"""
+            SELECT COUNT(*) AS n
+            FROM tag_definition
+            WHERE taxonomy_version = ? AND dimension IN ({canonical_placeholders})
+            """,
+            (TAXONOMY_VERSION, *CANONICAL_DIMENSIONS),
+        ).fetchone()["n"]
+    )
+    counts["taxonomy_tags_total"] = int(
+        connection.execute(
+            "SELECT COUNT(*) AS n FROM tag_definition WHERE taxonomy_version = ?",
+            (TAXONOMY_VERSION,),
+        ).fetchone()["n"]
+    )
+    counts["taxonomy_canonical_concepts"] = int(
+        connection.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM tag_definition
+            WHERE dimension = 'concepto'
+              AND taxonomy_version = ?
+              AND tag_key != 'SIN_CLASIFICAR'
+            """,
+            (TAXONOMY_VERSION,),
+        ).fetchone()["n"]
+    )
+    counts["taxonomy_c6_canonical"] = int(
+        connection.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM tag_definition
+            WHERE dimension = 'concepto'
+              AND taxonomy_version = ?
+              AND tag_key LIKE 'C6%'
+            """,
+            (TAXONOMY_VERSION,),
+        ).fetchone()["n"]
+    )
+    counts["taxonomy_mappings_needing_review"] = int(
+        connection.execute(
+            "SELECT COUNT(*) AS n FROM taxonomy_mapping WHERE mapping_status = 'needs_review'"
+        ).fetchone()["n"]
+    )
+    counts["classification_assignments"] = int(
+        connection.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM ad_tag t
+            JOIN tag_definition d ON d.id = t.tag_definition_id
+            WHERE d.taxonomy_version = ?
+              AND d.dimension NOT IN ('legacy_concepto_crudo', 'legacy_gallery_auto',
+                                      'legacy_preclasificacion', 'curaduria')
+            """,
+            (TAXONOMY_VERSION,),
+        ).fetchone()["n"]
+    )
+    counts["classification_pending"] = int(
+        connection.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM ad_tag t
+            JOIN tag_definition d ON d.id = t.tag_definition_id
+            WHERE t.review_status IN ('suggested', 'pending_review')
+              AND d.dimension NOT IN ('legacy_concepto_crudo', 'legacy_gallery_auto',
+                                      'legacy_preclasificacion', 'curaduria')
+            """
+        ).fetchone()["n"]
+    )
+    counts["classification_approved"] = int(
+        connection.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM ad_tag t
+            JOIN tag_definition d ON d.id = t.tag_definition_id
+            WHERE t.review_status = 'approved'
+              AND d.dimension NOT IN ('legacy_concepto_crudo', 'legacy_gallery_auto',
+                                      'legacy_preclasificacion', 'curaduria')
+            """
+        ).fetchone()["n"]
+    )
+    counts["classification_runs"] = int(
+        connection.execute("SELECT COUNT(*) AS n FROM classification_run").fetchone()["n"]
+    )
     return counts
 
 
@@ -197,6 +327,13 @@ def build_report(connection, root: Path | None = None) -> dict[str, Any]:
         {"name": "reference_canonico", "expected": 22, "actual": counts["reference_canonico"]},
         {"name": "reference_blueprint", "expected": 4, "actual": counts["reference_blueprint"]},
         {"name": "reference_blueprint_t01", "expected": 4, "actual": counts["reference_blueprint_t01"]},
+        {"name": "taxonomy_dimensions", "expected": len(DIMENSIONS), "actual": counts["taxonomy_dimension"]},
+        {
+            "name": "taxonomy_canonical_concepts",
+            "expected": len(CANONICAL_CONCEPT_KEYS),
+            "actual": counts["taxonomy_canonical_concepts"],
+        },
+        {"name": "taxonomy_c6_canonical", "expected": 0, "actual": counts["taxonomy_c6_canonical"]},
     ]
     for check in extra_checks:
         check["ok"] = check["actual"] == check["expected"]
@@ -231,6 +368,16 @@ def build_report(connection, root: Path | None = None) -> dict[str, Any]:
             "review_items_pending": counts["review_items_pending"],
             "visual_signatures": counts["visual_signatures"],
             "visual_candidates_pending": counts["visual_candidates_pending"],
+        },
+        "phase3": {
+            "taxonomy_versions": counts["taxonomy_version"],
+            "taxonomy_dimensions": counts["taxonomy_dimension"],
+            "taxonomy_tags": counts["taxonomy_tags"],
+            "taxonomy_mappings_needing_review": counts["taxonomy_mappings_needing_review"],
+            "classification_assignments": counts["classification_assignments"],
+            "classification_pending": counts["classification_pending"],
+            "classification_approved": counts["classification_approved"],
+            "classification_runs": counts["classification_runs"],
         },
         "ok": all(check["ok"] for check in checks),
     }

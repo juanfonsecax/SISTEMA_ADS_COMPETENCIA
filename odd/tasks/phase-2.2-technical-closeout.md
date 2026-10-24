@@ -45,7 +45,7 @@ import, review, scan, and restore without them.
 - Final recovery backup via `python -m ads_intel.cli backup`: `data/backups/phase2_recovery_20261023T024131Z.zip`, `ok: true`, 1581 recoverable files plus database and control manifests.
 - CLI restore smoke test: extracted to a temporary directory, database and code present, no retired script present.
 - Tests: `python -m unittest discover -s tests -v` -> 42 tests OK.
-- Live reconciliation: `python -m ads_intel.cli reconcile` -> `ok: true`, 40 checks pass.
+- Live reconciliation: `python -m ads_intel.cli reconcile` -> `ok: true`, 34 checks pass.
 - Live review queue: 22 pending items; no approvals recorded.
 - Live visual state: 2 scan runs, 8 pending candidates; latest run id 2, threshold 8, 597 signatures.
 - Legacy removal: 20 files deleted, `analisis-ad-2026-08-18.md` preserved under `ANALISIS/`; no code imports the retired programs.

@@ -54,6 +54,42 @@ python -m ads_intel.cli export-check --object asset --object-id 1
 
 `export-check` falla si el objeto no tiene evidencia aprobada, revisor y fecha. Los estados `unknown` y `evidence_needed` son válidos y quedan registrados; no equivalen a una aprobación.
 
+## Taxonomía, clasificación y exploración
+
+La taxonomía canónica `1.0.0` vive en SQLite y es versionada. C6 no es canónico: se conserva el histórico y se mapea a C5 únicamente como decisión explícita. Las etiquetas heredadas ambiguas quedan en `needs_review`; la clasificación automática nunca sobrescribe una asignación aprobada o revisada por una persona.
+
+```text
+python -m ads_intel.cli taxonomy-seed
+python -m ads_intel.cli taxonomy-list --dimension concepto
+python -m ads_intel.cli classify-legacy
+python -m ads_intel.cli classification-list --status pending_review
+python -m ads_intel.cli classification-show --tag-id 1
+python -m ads_intel.cli classification-review --tag-id 1 --action approve --reviewer "..." --reason "..."
+python -m ads_intel.cli mapping-list --status needs_review
+python -m ads_intel.cli mapping-decide --source-dimension legacy_preclasificacion --source-key CATALOGO_DINAMICO --target-dimension concepto --target-key C1_OFERTA --reviewer "..." --reason "..."
+```
+
+`classification-list` muestra solo dimensiones canónicas por defecto; use `--include-legacy` para revisar etiquetas históricas. La exploración cruza texto, anunciante, mercado, idioma, fechas y dimensiones. Los filtros `--tag` son repetibles.
+
+```text
+python -m ads_intel.cli explore --market GT --language es --tag concepto:C2_BENEFICIOS
+python -m ads_intel.cli explore --unclassified --limit 100
+python -m ads_intel.cli explore --low-evidence --limit 100
+python -m ads_intel.cli explore --missing-dimension hook
+python -m ads_intel.cli creative-show --creative-id 1
+python -m ads_intel.cli export-classifications --output data/exports/classifications.csv --scope canonical
+```
+
+La exportación incluye procedencia, evidencia, versión de taxonomía y estado de revisión. `--scope all` incluye dimensiones heredadas; el valor por defecto es `canonical`.
+
+El contrato de enriquecimiento futuro es solo una definición validada; no llama a ningún proveedor de pago. Acepta sugerencias con costo registrado y las deja en `suggested`. No aprueba claims ni asignaciones.
+
+```text
+python -m ads_intel.cli enrichment-contract
+python -m ads_intel.cli enrichment-ingest --input payload.json
+python -m ads_intel.cli enrichment-runs
+```
+
 ## Similitud visual
 
 La firma usa `dhash` versión `1` (64 bits, distancia Hamming). Un par con distancia menor o igual al umbral es solo un candidato pendiente: no se borra, fusiona ni declara duplicado. Cada ejecución de `visual-scan` queda identificada por su `scan_run_id`; la vista vigente muestra únicamente los candidatos del último escaneo con el umbral solicitado.
@@ -105,3 +141,6 @@ python -m unittest discover -s tests -v
 - Existen 22 elementos de revisión pendientes; no se aprueban por defecto.
 - Los pares visuales son candidatos, no identidades ni duplicados confirmados.
 - El umbral de similitud requiere calibración con decisiones humanas antes de usarse como criterio de deduplicación.
+- La clasificación heredada deja 88 asignaciones canónicas pendientes y 10 mappings ambiguos en `needs_review`; ninguna se aprueba automáticamente.
+- C6 no es un concepto canónico. Su etiqueta histórica se conserva y solo se mapea a C5 mediante una decisión explícita.
+- El contrato de enriquecimiento no llama a proveedores externos; las sugerencias futuras deberán pasar por revisión humana.

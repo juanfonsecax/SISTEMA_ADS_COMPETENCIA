@@ -10,7 +10,21 @@ from .config import (
     DEFAULT_MANIFEST_PATH,
     REPO_ROOT,
 )
+from .classification import (
+    classification_context,
+    classify_legacy,
+    list_classifications,
+    list_mappings,
+    record_classification_review,
+    record_mapping_decision,
+)
 from .db import apply_migrations, connect
+from .enrichment import (
+    enrichment_contract_schema,
+    ingest_enrichment,
+    list_enrichment_runs,
+)
+from .explorer import creative_detail, export_classifications, search_creatives
 from .governance import (
     ApprovalError,
     assert_exportable,
@@ -23,6 +37,7 @@ from .inventory import create_recovery_backup, restore_recovery_backup
 from .manifest import freeze
 from .reconcile import build_report
 from .review import list_review_items, record_review_decision, seed_review_queue
+from .taxonomy import list_taxonomy, seed_taxonomy
 from .visuals import (
     DEFAULT_THRESHOLD,
     list_visual_candidates,
@@ -210,6 +225,203 @@ def _visual_runs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _taxonomy_seed(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        with connection:
+            result = seed_taxonomy(connection, Path(args.root).resolve())
+    finally:
+        connection.close()
+    _print(result)
+    return 0
+
+
+def _taxonomy_list(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        dimensions = list_taxonomy(connection, dimension=args.dimension)
+    finally:
+        connection.close()
+    _print(dimensions)
+    return 0
+
+
+def _classify_legacy(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        with connection:
+            result = classify_legacy(connection, root=Path(args.root).resolve())
+    finally:
+        connection.close()
+    _print(result)
+    return 0 if not result["errors"] else 1
+
+
+def _classification_list(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        rows = list_classifications(
+            connection,
+            status=args.status,
+            dimension=args.dimension,
+            limit=args.limit,
+            include_legacy=args.include_legacy,
+        )
+    finally:
+        connection.close()
+    _print(rows)
+    return 0
+
+
+def _classification_show(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        result = classification_context(connection, args.tag_id)
+    finally:
+        connection.close()
+    _print(result)
+    return 0
+
+
+def _classification_review(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        with connection:
+            result = record_classification_review(
+                connection,
+                args.tag_id,
+                action=args.action,
+                reviewer=args.reviewer,
+                reason=args.reason,
+                target_dimension=args.target_dimension,
+                target_tag_key=args.tag_key,
+                approve_correction=args.approve,
+                primary=args.primary,
+                reviewed_at=args.reviewed_at,
+            )
+    finally:
+        connection.close()
+    _print(result)
+    return 0
+
+
+def _mapping_list(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        rows = list_mappings(connection, status=args.status, source_dimension=args.source_dimension)
+    finally:
+        connection.close()
+    _print(rows)
+    return 0
+
+
+def _mapping_decide(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        with connection:
+            mapping = record_mapping_decision(
+                connection,
+                source_dimension=args.source_dimension,
+                source_tag_key=args.source_key,
+                target_dimension=args.target_dimension,
+                target_tag_key=args.target_key,
+                reviewer=args.reviewer,
+                reason=args.reason,
+            )
+            classified = None if args.no_apply else classify_legacy(
+                connection, root=Path(args.root).resolve()
+            )
+    finally:
+        connection.close()
+    _print({"mapping": mapping, "classification": classified})
+    return 0
+
+
+def _explore(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        tag_filters = []
+        for value in args.tag or []:
+            if ":" not in value:
+                raise ValueError(f"Tag filter must be dimension:key, got {value!r}")
+            dimension, key = value.split(":", 1)
+            tag_filters.append((dimension.strip(), key.strip()))
+        rows = search_creatives(
+            connection,
+            text=args.text,
+            advertiser=args.advertiser,
+            tag_filters=tag_filters,
+            market=args.market,
+            language=args.language,
+            date_from=args.date_from,
+            date_to=args.date_to,
+            unclassified=args.unclassified,
+            low_evidence=args.low_evidence,
+            dimension_missing=args.missing_dimension,
+            limit=args.limit,
+            offset=args.offset,
+        )
+    finally:
+        connection.close()
+    _print(rows)
+    return 0
+
+
+def _creative_show(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        result = creative_detail(connection, args.creative_id)
+    finally:
+        connection.close()
+    _print(result)
+    return 0
+
+
+def _export_classifications(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        result = export_classifications(
+            connection,
+            Path(args.output).resolve(),
+            format=args.format,
+            dimension=args.dimension,
+            status=args.status,
+            cutoff=args.cutoff,
+            scope=args.scope,
+        )
+    finally:
+        connection.close()
+    _print(result)
+    return 0
+
+
+def _enrichment_contract(args: argparse.Namespace) -> int:
+    _print(enrichment_contract_schema())
+    return 0
+
+
+def _enrichment_ingest(args: argparse.Namespace) -> int:
+    payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    connection = _connection(args)
+    try:
+        with connection:
+            result = ingest_enrichment(connection, payload)
+    finally:
+        connection.close()
+    _print(result)
+    return 0
+
+
+def _enrichment_runs(args: argparse.Namespace) -> int:
+    connection = _connection(args)
+    try:
+        rows = list_enrichment_runs(connection, limit=args.limit)
+    finally:
+        connection.close()
+    _print(rows)
+    return 0
+
+
 def _backup(args: argparse.Namespace) -> int:
     result = create_recovery_backup(
         Path(args.root).resolve(),
@@ -317,6 +529,119 @@ def build_parser() -> argparse.ArgumentParser:
     visual_runs = subparsers.add_parser("visual-runs", help="List visual scan runs")
     visual_runs.add_argument("--limit", type=int)
     visual_runs.set_defaults(func=_visual_runs)
+
+    taxonomy_seed = subparsers.add_parser("taxonomy-seed", help="Seed the active canonical taxonomy")
+    taxonomy_seed.set_defaults(func=_taxonomy_seed)
+
+    taxonomy_list = subparsers.add_parser("taxonomy-list", help="List canonical dimensions and tags")
+    taxonomy_list.add_argument("--dimension")
+    taxonomy_list.set_defaults(func=_taxonomy_list)
+
+    classify_legacy_parser = subparsers.add_parser(
+        "classify-legacy", help="Map legacy labels into canonical dimensions"
+    )
+    classify_legacy_parser.set_defaults(func=_classify_legacy)
+
+    classification_list = subparsers.add_parser(
+        "classification-list", help="List classification assignments for human review"
+    )
+    classification_list.add_argument(
+        "--status",
+        choices=["suggested", "pending_review", "reviewed", "approved", "rejected", "superseded"],
+    )
+    classification_list.add_argument("--dimension")
+    classification_list.add_argument("--limit", type=int)
+    classification_list.add_argument("--include-legacy", action="store_true")
+    classification_list.set_defaults(func=_classification_list)
+
+    classification_show = subparsers.add_parser(
+        "classification-show", help="Show one assignment with creative, assets, tags, and history"
+    )
+    classification_show.add_argument("--tag-id", type=int, required=True)
+    classification_show.set_defaults(func=_classification_show)
+
+    classification_review = subparsers.add_parser(
+        "classification-review", help="Approve, correct, reject, or defer a classification"
+    )
+    classification_review.add_argument("--tag-id", type=int, required=True)
+    classification_review.add_argument(
+        "--action", required=True, choices=["approve", "correct", "reject", "defer"]
+    )
+    classification_review.add_argument("--reviewer", required=True)
+    classification_review.add_argument("--reason")
+    classification_review.add_argument("--target-dimension")
+    classification_review.add_argument("--tag-key")
+    classification_review.add_argument("--approve", action="store_true", help="Approve a correction")
+    classification_review.add_argument(
+        "--primary", action=argparse.BooleanOptionalAction, default=None
+    )
+    classification_review.add_argument("--reviewed-at")
+    classification_review.set_defaults(func=_classification_review)
+
+    mapping_list = subparsers.add_parser("mapping-list", help="List legacy-to-canonical mappings")
+    mapping_list.add_argument("--status", choices=["mapped", "needs_review", "rejected"])
+    mapping_list.add_argument("--source-dimension")
+    mapping_list.set_defaults(func=_mapping_list)
+
+    mapping_decide = subparsers.add_parser(
+        "mapping-decide", help="Resolve an ambiguous legacy label and apply the mapping"
+    )
+    mapping_decide.add_argument("--source-dimension", required=True)
+    mapping_decide.add_argument("--source-key", required=True)
+    mapping_decide.add_argument("--target-dimension", required=True)
+    mapping_decide.add_argument("--target-key", required=True)
+    mapping_decide.add_argument("--reviewer", required=True)
+    mapping_decide.add_argument("--reason", required=True)
+    mapping_decide.add_argument("--no-apply", action="store_true")
+    mapping_decide.set_defaults(func=_mapping_decide)
+
+    explore = subparsers.add_parser("explore", help="Search creatives across canonical dimensions")
+    explore.add_argument("--text")
+    explore.add_argument("--advertiser")
+    explore.add_argument("--tag", action="append", help="Filter as dimension:key; repeatable")
+    explore.add_argument("--market")
+    explore.add_argument("--language")
+    explore.add_argument("--from", dest="date_from")
+    explore.add_argument("--to", dest="date_to")
+    explore.add_argument("--unclassified", action="store_true")
+    explore.add_argument("--low-evidence", action="store_true")
+    explore.add_argument("--missing-dimension")
+    explore.add_argument("--limit", type=int, default=50)
+    explore.add_argument("--offset", type=int, default=0)
+    explore.set_defaults(func=_explore)
+
+    creative_show = subparsers.add_parser("creative-show", help="Show one creative with tags and assets")
+    creative_show.add_argument("--creative-id", type=int, required=True)
+    creative_show.set_defaults(func=_creative_show)
+
+    export_classifications_parser = subparsers.add_parser(
+        "export-classifications", help="Export classifications with provenance and cutoff"
+    )
+    export_classifications_parser.add_argument("--output", required=True)
+    export_classifications_parser.add_argument("--format", choices=["csv", "jsonl"], default="csv")
+    export_classifications_parser.add_argument("--dimension")
+    export_classifications_parser.add_argument(
+        "--status",
+        choices=["suggested", "pending_review", "reviewed", "approved", "rejected", "superseded"],
+    )
+    export_classifications_parser.add_argument("--cutoff")
+    export_classifications_parser.add_argument("--scope", choices=["canonical", "all"], default="canonical")
+    export_classifications_parser.set_defaults(func=_export_classifications)
+
+    enrichment_contract = subparsers.add_parser(
+        "enrichment-contract", help="Print the future enrichment contract"
+    )
+    enrichment_contract.set_defaults(func=_enrichment_contract)
+
+    enrichment_ingest = subparsers.add_parser(
+        "enrichment-ingest", help="Validate and ingest a future enrichment payload"
+    )
+    enrichment_ingest.add_argument("--input", required=True)
+    enrichment_ingest.set_defaults(func=_enrichment_ingest)
+
+    enrichment_runs = subparsers.add_parser("enrichment-runs", help="List enrichment runs and costs")
+    enrichment_runs.add_argument("--limit", type=int, default=20)
+    enrichment_runs.set_defaults(func=_enrichment_runs)
 
     backup_parser = subparsers.add_parser(
         "backup", help="Create and verify a full code, data, and database recovery backup"
